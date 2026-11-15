@@ -1,8 +1,53 @@
 # Youtube-DJ (yt-dj)
 
+<p align="center">
+  <img src="docs/screenshots/worlds.gif" alt="yt-dj DJ view cycling through its 18 visual worlds" width="100%">
+</p>
+
+<p align="center"><i>The DJ view: one blend, shown in each of the 18 worlds.</i></p>
+
 **Turn a YouTube Mix into a DJ set.** A Chrome extension watches your YouTube Mix queue, a local Python helper analyses each song (tempo, key, beats, vocals, song structure), and when one song ends the next one doesn't just start — it's *mixed in*, the way a DJ would: beat-matched, on a phrase, with the vocals handed off cleanly.
 
 > 🚧 **Building in public.** This is an early, fast-moving prototype. Expect rough edges, big refactors and breaking changes. Ideas, issues and PRs are very welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## 18 worlds, not 18 skins
+
+The DJ view isn't one layout with swappable colours. Each world tells you what's playing, what's next and when the blend lands in its own visual language: a temple frieze, a chrome Y2K gadget, a spell book, a pointillist canvas. Every screenshot below shows the same moment: halfway through a blend.
+
+<table>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/neoclassical.jpg"><img src="docs/screenshots/neoclassical.jpg" alt="Neoclassical world"></a><br><sub><b>Neoclassical</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/y2k.jpg"><img src="docs/screenshots/y2k.jpg" alt="Y2K world"></a><br><sub><b>Y2K</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/surrealism.jpg"><img src="docs/screenshots/surrealism.jpg" alt="Surrealism world"></a><br><sub><b>Surrealism</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/mid-century.jpg"><img src="docs/screenshots/mid-century.jpg" alt="Mid-Century world"></a><br><sub><b>Mid-Century</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/glassmorphism.jpg"><img src="docs/screenshots/glassmorphism.jpg" alt="Glassmorphism world"></a><br><sub><b>Glassmorphism</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/ethereal.jpg"><img src="docs/screenshots/ethereal.jpg" alt="Ethereal world"></a><br><sub><b>Ethereal</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/anthropomorphic.jpg"><img src="docs/screenshots/anthropomorphic.jpg" alt="Anthropomorphic world"></a><br><sub><b>Anthropomorphic</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/pixel-art.jpg"><img src="docs/screenshots/pixel-art.jpg" alt="Pixel Art world"></a><br><sub><b>Pixel Art</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/conceptual-sketch.jpg"><img src="docs/screenshots/conceptual-sketch.jpg" alt="Conceptual Sketch world"></a><br><sub><b>Conceptual Sketch</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/japandi.jpg"><img src="docs/screenshots/japandi.jpg" alt="Japandi world"></a><br><sub><b>Japandi</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/kitsch.jpg"><img src="docs/screenshots/kitsch.jpg" alt="Kitsch world"></a><br><sub><b>Kitsch</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/brutalism.jpg"><img src="docs/screenshots/brutalism.jpg" alt="Brutalism world"></a><br><sub><b>Brutalism</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/cybercore.jpg"><img src="docs/screenshots/cybercore.jpg" alt="Cybercore world"></a><br><sub><b>Cybercore</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/synthwave.jpg"><img src="docs/screenshots/synthwave.jpg" alt="Synthwave world"></a><br><sub><b>Synthwave</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/vaporwave.jpg"><img src="docs/screenshots/vaporwave.jpg" alt="Vaporwave world"></a><br><sub><b>Vaporwave</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="33%"><a href="docs/screenshots/pop-art.jpg"><img src="docs/screenshots/pop-art.jpg" alt="Pop Art world"></a><br><sub><b>Pop Art</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/dark-magic-academia.jpg"><img src="docs/screenshots/dark-magic-academia.jpg" alt="Dark Magic Academia world"></a><br><sub><b>Dark Magic Academia</b></sub></td>
+    <td align="center" width="33%"><a href="docs/screenshots/pointillism.jpg"><img src="docs/screenshots/pointillism.jpg" alt="Pointillism world"></a><br><sub><b>Pointillism</b></sub></td>
+  </tr>
+</table>
+
+Want to add a world? Each one is a single self-contained file in `extension/ui/`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## How it works
 

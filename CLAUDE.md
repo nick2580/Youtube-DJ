@@ -25,6 +25,7 @@ yt-dj is a Chrome extension plus a local Python helper that turns a YouTube Mix 
 - Helper: `cd poc && .venv/Scripts/python server.py` (Windows) or `.venv/bin/python server.py`. Always use the venv, because global Python installs hit numpy/soxr conflicts.
 - Extension: load `extension/` unpacked. After changes, reload it in `chrome://extensions` and refresh the YouTube tab.
 - UI check without YouTube: `design/check.sh <World>...` for script errors, `design/shot.sh <World> <state>` for a screenshot. States: `armed blending analysing arrival offline idle`. Headless captures land about 1 s in, so entry animations show mid-flight.
+- README screenshots: `design/gallery.sh` regenerates `docs/screenshots/*.jpg` and the hero `worlds.gif`. Re-run it after visible changes to a world, and add new worlds to its list.
 - Ratings summary: `poc/.venv/Scripts/python poc/feedback_report.py`.
 
 ## How quality is judged
