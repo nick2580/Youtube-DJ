@@ -1,0 +1,28 @@
+name: Bug report
+description: Something doesn't work
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Start helper  2. Open Mix for <song>  3. …"
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "Windows 11, Chrome 131, Python 3.10, RTX 3060 / CPU-only"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Helper console output / browser console errors
+      render: text

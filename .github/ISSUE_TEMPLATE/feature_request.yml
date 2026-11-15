@@ -1,0 +1,14 @@
+name: Idea / feature request
+description: Suggest an improvement, a new mixing technique or a new DJ-view world
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters / what problem it solves

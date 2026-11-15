@@ -1,0 +1,23 @@
+name: Bad blend
+description: A transition that sounded wrong
+labels: [mixing]
+body:
+  - type: input
+    id: songs
+    attributes:
+      label: Song A → Song B (YouTube links or IDs)
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What sounded wrong?
+      description: e.g. vocals overlapped, off-beat, key clash, blend too long or short, came in mid-word
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plan details (optional)
+      description: Output of http://127.0.0.1:8765/plan for this pair, or the helper log lines
+      render: json

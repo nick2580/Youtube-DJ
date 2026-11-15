@@ -1,0 +1,21 @@
+# yt-dj local helper — Python 3.10.
+# Install PyTorch FIRST from https://pytorch.org/get-started/locally/ (pick your CUDA version), e.g.
+#   pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124
+# Then: pip install -r requirements.txt
+# Versions below are the ones the project is developed against.
+
+fastapi==0.162.5
+uvicorn==0.54.0
+pydantic==2.14.3
+numpy==2.2.6
+scipy==1.15.3
+soundfile==0.14.0
+librosa==0.11.0
+demucs==4.1.0
+
+# Optional: allin1 music-structure analysis (intro/verse/chorus labels). The helper falls back to
+# its own fast analysis when allin1 isn't importable. madmom must be built from git:
+#   pip install cython
+#   pip install --no-build-isolation "git+https://github.com/CPJKU/madmom"
+#   pip install allin1==1.1.0
+#   python install_natten_shim.py      # pure-PyTorch NATTEN replacement, no CUDA build needed

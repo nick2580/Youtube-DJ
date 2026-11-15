@@ -1,0 +1,37 @@
+# --- secrets & local config ---
+.secrets/
+.env*
+
+# --- dependencies / build ---
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# --- helper runtime data (downloaded audio, stems, analysis caches, user feedback) ---
+# Never commit audio: it is copyrighted music downloaded from YouTube.
+poc/cache/
+poc/audio/
+poc/ref/
+poc/stems/
+poc/struct/
+poc/allin1_demix/
+poc/allin1_spec/
+poc/feedback/
+poc/out*/
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.webm
+*.npy
+*.pkl
+*.log
+
+# --- editor / OS ---
+*.bak
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

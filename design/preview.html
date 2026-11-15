@@ -1,0 +1,86 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>yt-dj worlds preview</title>
+<style>html,body{margin:0;height:100%;background:#111}</style>
+<!-- Mock data harness for the DJ worlds. ?theme=Y2K&kind=armed|blending|analysing|arrival|offline|off&p=0.5&paused=1 -->
+<script src="../extension/ui/core.js"></script>
+<script src="../extension/ui/t-neo.js"></script>
+<script src="../extension/ui/t-y2k.js"></script>
+<script src="../extension/ui/t-surreal.js"></script>
+<script src="../extension/ui/t-mid.js"></script>
+<script src="../extension/ui/t-glass.js"></script>
+<script src="../extension/ui/t-ethereal.js"></script>
+<script src="../extension/ui/t-anthro.js"></script>
+<script src="../extension/ui/t-pixel.js"></script>
+<script src="../extension/ui/t-sketch.js"></script>
+<script src="../extension/ui/t-japandi.js"></script>
+<script src="../extension/ui/t-kitsch.js"></script>
+<script src="../extension/ui/t-brutal.js"></script>
+<script src="../extension/ui/t-cyber.js"></script>
+<script src="../extension/ui/t-synth.js"></script>
+<script src="../extension/ui/t-vapor.js"></script>
+<script src="../extension/ui/t-pop.js"></script>
+<script src="../extension/ui/t-academia.js"></script>
+<script src="../extension/ui/t-point.js"></script>
+<script>
+const Q = new URLSearchParams(location.search);
+const kind0 = Q.get("kind") || "armed";
+const A = { id: "FxAG_11PzCk", title: "Galliyan", sub: "Ek Villain · Ankit Tiwari", bpm: 92.3, key: "E minor", cam: "9A", c1: "#c2553a", c2: "#2a1512" };
+const B = { id: "GVizJ_jpUnw", title: "Gehra Hua", sub: "Dhurandhar · Arijit Singh", bpm: 96, key: "G major", cam: "9B", c1: "#3f7fa6", c2: "#10202c" };
+for (const t of [A, B]) t.thumb = `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`;
+// fake "video": slow pan across the thumbnail
+const vid = document.createElement("canvas"); vid.width = 640; vid.height = 360;
+const vc = vid.getContext("2d"); const im = new Image(); im.crossOrigin = "anonymous"; im.src = A.thumb;
+const bins = new Float32Array(24);
+const t0 = performance.now(); let enabled = kind0 !== "off", helper = kind0 !== "offline";
+const segs = [["intro",0,18],["verse",18,62],["chorus",62,96],["verse",96,140],["chorus",140,176],["bridge",176,214],["chorus",214,262],["outro",262,309]].map(([label,start,end])=>({label,start,end}));
+// mock blend feedback: ?click=up|down opens the reason popover, ?tags=Keys%20clashed,Too%20abrupt pre-selects reasons
+const RT = { id: "mock", rating: null, tags: [], a: "Kesariya", b: "Galliyan", live: false, age: 20 };
+YTDJ.start({
+  fontUrl: (f) => "../extension/fonts/" + f,
+  store: { get: (k) => Q.get(k) || localStorage.getItem("p-" + k), set: (k, v) => localStorage.setItem("p-" + k, v) },
+  act: { open() {}, toggleAuto() { enabled = !enabled; }, reconnect() { helper = true; }, playPause() { paused = !paused; },
+    rate(r) { RT.rating = RT.rating === r ? null : r; RT.tags = []; }, tag(t) { RT.tags = RT.tags.includes(t) ? RT.tags.filter((x) => x !== t) : [...RT.tags, t]; } },
+  vm(now) {
+    const el = (now - t0) / 1000, time = 148 + (paused ? 0 : el);
+    if (im.complete && im.naturalWidth) { const z = 1.25 + .12 * Math.sin(el / 5), w = 480 / z, h = 270 / z;
+      vc.drawImage(im, (480 - w) / 2 + 24 * Math.sin(el / 4), 45 + (270 - h) / 2, w, h, 0, 0, 640, 360); }
+    else { vc.fillStyle = "#567"; vc.fillRect(0, 0, 640, 360); vc.fillStyle = "#fc9"; vc.beginPath(); vc.arc(320 + 150 * Math.sin(el), 180, 90, 0, 7); vc.fill(); }
+    const ph = (time * A.bpm / 60) % 1, beat = paused ? 0 : Math.exp(-ph * 5);
+    for (let i = 0; i < 24; i++) { const x = paused ? 0 : beat * (.8 - i / 40) + .3 * Math.abs(Math.sin(now / 300 + i * 1.7)) * (1 - i / 34); bins[i] += (x - bins[i]) * .3; }
+    const avg = (a, z) => { let s = 0; for (let i = a; i < z; i++) s += bins[i]; return s / (z - a); };
+    let kind = !helper ? "offline" : !enabled ? "off" : kind0 === "offline" || kind0 === "off" ? "armed" : kind0;
+    const p = kind === "blending" ? (Q.get("p") != null ? +Q.get("p") : (el / 16) % 1) : 0;
+    const countdown = kind === "armed" ? Math.max(0, 95 - el) : kind === "blending" ? (1 - p) * 16 : null;
+    const copy = {
+      armed: ["Mix in", YTDJ.fmt(Math.ceil(countdown)), "Galliyan leaves at the end of the chorus. Gehra Hua enters as a verse begins."],
+      blending: ["Drop in", YTDJ.fmt(Math.ceil(countdown)), "Galliyan leaves at the end of the chorus. Gehra Hua enters as a verse begins."],
+      analysing: ["Listening", "Planning the next mix", "separating stems"],
+      arrival: ["The drop", "Galliyan", "Entered as a verse begins. Kesariya has left the set."],
+      offline: ["Helper offline", "Mixing is on hold", "The local analysis helper isn't responding. YouTube will cut between songs as usual until it's back. Start it with start-helper.bat."],
+      off: ["Auto-mix off", "YouTube's normal cut", "Gehra Hua is ready. Turn auto-mix on and it blends in at 4:03."],
+      idle: ["Waiting", "Play a YouTube Mix", "Open a Mix or a playlist and the set begins."],
+    }[kind];
+    const hasPlan = kind === "armed" || kind === "blending" || kind === "off";
+    return {
+      now: kind === "idle" ? null : A, next: kind === "idle" ? null : B, prev: kind === "arrival" ? { ...B, title: "Kesariya" } : null,
+      kind, eyebrow: paused && hasPlan ? "Paused" : copy[0], headline: copy[1], body: copy[2], status: copy[2], pill: copy[0], step: kind === "analysing" ? 2 : -1,
+      steps: ["fetching audio", "checking length", "separating stems", "mapping sections", "matching tempo & key", "choosing the moment"],
+      paused, enabled, helper, engine: "all-in-one", p, sinceDrop: kind === "arrival" ? 3 + el : 99, countdown, countLabel: kind === "blending" ? "Drop in" : "Mix in",
+      plan: hasPlan ? { tech: "Harmonic blend", style: "blend", leave: "at the end of the chorus", enter: "as a verse begins", exitAt: 262, entryAt: 31, camA: "9A", camB: "9B", blendLen: 16,
+        mixStart: enabled ? 243 : null, mixEnd: enabled ? 259 : null, drop: enabled ? 259 : null } : null,
+      time, dur: 309, segs: kind === "analysing" ? null : segs, beat, beatPhase: ph,
+      audio: { bins, bass: avg(0, 6), mid: avg(8, 16), high: avg(16, 24), level: avg(0, 24) },
+      video: vid, videoOk: !Q.get("novideo"), visible: true,
+      rate: Q.get("norate") ? null : RT,
+    };
+  },
+});
+let paused = !!Q.get("paused");
+YTDJ.toggle(!Q.get("closed"));
+if (Q.get("click")) setTimeout(() => {
+  const r = document.getElementById("ytdj-host").shadowRoot;
+  r.querySelector(`${Q.get("closed") ? ".prate" : ".dk-rate"} .rt-b[data-r="${Q.get("click")}"]`).click();
+  for (const t of (Q.get("tags") || "").split(",").filter(Boolean)) RT.tags.push(t);
+}, 400);
+</script>
