@@ -54,7 +54,7 @@
     .v-act { padding: 5px 16px; background: #c0c0c0; box-shadow: inset -1px -1px 0 #000, inset 1px 1px 0 #fff, inset -2px -2px 0 #808080, inset 2px 2px 0 #dfdfdf; font: 400 var(--f)/1.2 Tahoma, sans-serif; outline: 1px dotted #000; outline-offset: -5px; } .v-act:active { box-shadow: inset 1px 1px 0 #000, inset -1px -1px 0 #fff; }
     .v-bmp { right: 15vw; bottom: 9vh; width: calc(var(--u) * 20); z-index: 4; }
     .v-pic { position: relative; aspect-ratio: 4/3; overflow: hidden; background: #000; } .v-pic img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.34); filter: saturate(1.4) hue-rotate(-14deg); } .v-pic i { position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,113,206,.5), rgba(1,205,254,.45)); mix-blend-mode: screen; }
-    .v-nt { padding: 6px 6px 0; font: 400 calc(var(--u) * 1.5)/1.15 "Yu Gothic", "MS Gothic", serif; color: #000080; overflow-wrap: anywhere; } .v-ns { padding: 2px 6px 6px; font: 400 var(--f)/1.2 "Courier New", monospace; }
+    .v-nt { padding: 6px 6px 0; font: 400 calc(var(--u) * 1.5)/1.15 "Yu Gothic", "MS Gothic", serif; color: #000080; white-space: nowrap; overflow: hidden; } .v-ns { padding: 2px 6px 6px; font: 400 var(--f)/1.2 "Courier New", monospace; }
     @media (max-aspect-ratio: 13/10) { .v-player { left: 5vw; width: 60vw; } .v-bmp { display: none; } .v-dlg { right: 3vw; top: auto; bottom: 30vh; } }
     `,
     mount(el) {
@@ -91,7 +91,7 @@
       Y.txt(q(".v-plan"), vm.plan ? `${vm.plan.camA} to ${vm.plan.camB}, ${vm.plan.blendLen}s` : "");
       const c = Y.cta(vm), btn = q(".v-act"); Y.txt(btn, c ? c.label : "OK"); btn.onclick = () => { const k = Y.cta(Y.vm); if (k) k.run(); };
       const bm = q(".v-bmp"); bm.style.visibility = b ? "visible" : "hidden";
-      if (b) { Y.src(bm.querySelector("img"), b.thumb); Y.txt(q(".v-nt"), wide(b.title)); Y.txt(q(".v-ns"), Y.meta(b, " / ") || b.sub); bm.style.zIndex = vm.kind === "blending" ? "6" : "4"; if (pe) bm.style.transform += ` scale(${(1 + pe * 0.25).toFixed(3)}) translate(${(-pe * 12).toFixed(1)}vw,${(-pe * 16).toFixed(1)}vh)`; }
+      if (b) { Y.src(bm.querySelector("img"), b.thumb); Y.txt(q(".v-nt"), wide(b.title)); Y.once(st, "ntfit", b.title + innerWidth, () => Y.fit(q(".v-nt"), Y.u() * 1.5, Y.u() * 0.75)); Y.txt(q(".v-ns"), Y.meta(b, " / ") || b.sub); bm.style.zIndex = vm.kind === "blending" ? "6" : "4"; if (pe) bm.style.transform += ` scale(${(1 + pe * 0.25).toFixed(3)}) translate(${(-pe * 12).toFixed(1)}vw,${(-pe * 16).toFixed(1)}vh)`; }
     },
   });
 })();

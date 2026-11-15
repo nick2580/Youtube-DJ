@@ -25,40 +25,43 @@
 <script>
 const Q = new URLSearchParams(location.search);
 const kind0 = Q.get("kind") || "armed";
-const A = { id: "FxAG_11PzCk", title: "Galliyan", sub: "Ek Villain · Ankit Tiwari", bpm: 92.3, key: "E minor", cam: "9A", c1: "#c2553a", c2: "#2a1512" };
-const B = { id: "GVizJ_jpUnw", title: "Gehra Hua", sub: "Dhurandhar · Arijit Singh", bpm: 96, key: "G major", cam: "9B", c1: "#3f7fa6", c2: "#10202c" };
+const A = { id: "GVizJ_jpUnw", title: "Gehra Hua", sub: "Dhurandhar · Arijit Singh", bpm: 125, key: "D minor", cam: "7A", c1: "#b3283f", c2: "#1d1512" };
+const B = { id: "FO9rBogdRRQ", title: "Channa Mereya", sub: "Ae Dil Hai Mushkil · Arijit Singh", bpm: 89.6, key: "C major", cam: "8B", c1: "#d0805a", c2: "#2b1810" };
 for (const t of [A, B]) t.thumb = `https://i.ytimg.com/vi/${t.id}/hqdefault.jpg`;
 // fake "video": slow pan across the thumbnail
 const vid = document.createElement("canvas"); vid.width = 640; vid.height = 360;
 const vc = vid.getContext("2d"); const im = new Image(); im.crossOrigin = "anonymous"; im.src = A.thumb;
 const bins = new Float32Array(24);
+const MIX_START = 316;   // 16-s blend ending at the close of the last chorus (335 s)
 const t0 = performance.now(); let enabled = kind0 !== "off", helper = kind0 !== "offline";
-const segs = [["intro",0,18],["verse",18,62],["chorus",62,96],["verse",96,140],["chorus",140,176],["bridge",176,214],["chorus",214,262],["outro",262,309]].map(([label,start,end])=>({label,start,end}));
+// Gehra Hua's real allin1 sections (consecutive repeats merged)
+const segs = [["intro",0,21],["verse",21,66],["chorus",66,98],["verse",98,113],["inst",113,129],["verse",129,190],["chorus",190,236],["verse",236,266],["chorus",266,281],["verse",281,297],["chorus",297,335],["outro",335,363]].map(([label,start,end])=>({label,start,end}));
 // mock blend feedback: ?click=up|down opens the reason popover, ?tags=Keys%20clashed,Too%20abrupt pre-selects reasons
-const RT = { id: "mock", rating: null, tags: [], a: "Kesariya", b: "Galliyan", live: false, age: 20 };
+const RT = { id: "mock", rating: null, tags: [], a: "Kesariya", b: "Gehra Hua", live: false, age: 20 };
 YTDJ.start({
   fontUrl: (f) => "../extension/fonts/" + f,
   store: { get: (k) => Q.get(k) || localStorage.getItem("p-" + k), set: (k, v) => localStorage.setItem("p-" + k, v) },
   act: { open() {}, toggleAuto() { enabled = !enabled; }, reconnect() { helper = true; }, playPause() { paused = !paused; },
     rate(r) { RT.rating = RT.rating === r ? null : r; RT.tags = []; }, tag(t) { RT.tags = RT.tags.includes(t) ? RT.tags.filter((x) => x !== t) : [...RT.tags, t]; } },
   vm(now) {
-    const el = (now - t0) / 1000, time = 148 + (paused ? 0 : el);
+    const el = (now - t0) / 1000;
+    let kind = !helper ? "offline" : !enabled ? "off" : kind0 === "offline" || kind0 === "off" ? "armed" : kind0;
+    const p = kind === "blending" ? (Q.get("p") != null ? +Q.get("p") : (el / 16) % 1) : 0;
+    const countdown = kind === "armed" ? Math.max(0, 95 - el) : kind === "blending" ? (1 - p) * 16 : null;
+    const time = kind === "blending" ? MIX_START + p * 16 : kind === "armed" ? MIX_START - countdown : 148 + (paused ? 0 : el);
     if (im.complete && im.naturalWidth) { const z = 1.25 + .12 * Math.sin(el / 5), w = 480 / z, h = 270 / z;
       vc.drawImage(im, (480 - w) / 2 + 24 * Math.sin(el / 4), 45 + (270 - h) / 2, w, h, 0, 0, 640, 360); }
     else { vc.fillStyle = "#567"; vc.fillRect(0, 0, 640, 360); vc.fillStyle = "#fc9"; vc.beginPath(); vc.arc(320 + 150 * Math.sin(el), 180, 90, 0, 7); vc.fill(); }
     const ph = (time * A.bpm / 60) % 1, beat = paused ? 0 : Math.exp(-ph * 5);
     for (let i = 0; i < 24; i++) { const x = paused ? 0 : beat * (.8 - i / 40) + .3 * Math.abs(Math.sin(now / 300 + i * 1.7)) * (1 - i / 34); bins[i] += (x - bins[i]) * .3; }
     const avg = (a, z) => { let s = 0; for (let i = a; i < z; i++) s += bins[i]; return s / (z - a); };
-    let kind = !helper ? "offline" : !enabled ? "off" : kind0 === "offline" || kind0 === "off" ? "armed" : kind0;
-    const p = kind === "blending" ? (Q.get("p") != null ? +Q.get("p") : (el / 16) % 1) : 0;
-    const countdown = kind === "armed" ? Math.max(0, 95 - el) : kind === "blending" ? (1 - p) * 16 : null;
     const copy = {
-      armed: ["Mix in", YTDJ.fmt(Math.ceil(countdown)), "Galliyan leaves at the end of the chorus. Gehra Hua enters as a verse begins."],
-      blending: ["Drop in", YTDJ.fmt(Math.ceil(countdown)), "Galliyan leaves at the end of the chorus. Gehra Hua enters as a verse begins."],
+      armed: ["Mix in", YTDJ.fmt(Math.ceil(countdown)), "Gehra Hua leaves at the end of the chorus. Channa Mereya enters as a verse begins."],
+      blending: ["Drop in", YTDJ.fmt(Math.ceil(countdown)), "Gehra Hua leaves at the end of the chorus. Channa Mereya enters as a verse begins."],
       analysing: ["Listening", "Planning the next mix", "separating stems"],
-      arrival: ["The drop", "Galliyan", "Entered as a verse begins. Kesariya has left the set."],
+      arrival: ["The drop", "Gehra Hua", "Entered as a verse begins. Kesariya has left the set."],
       offline: ["Helper offline", "Mixing is on hold", "The local analysis helper isn't responding. YouTube will cut between songs as usual until it's back. Start it with start-helper.bat."],
-      off: ["Auto-mix off", "YouTube's normal cut", "Gehra Hua is ready. Turn auto-mix on and it blends in at 4:03."],
+      off: ["Auto-mix off", "YouTube's normal cut", "Channa Mereya is ready. Turn auto-mix on and it blends in at 5:16."],
       idle: ["Waiting", "Play a YouTube Mix", "Open a Mix or a playlist and the set begins."],
     }[kind];
     const hasPlan = kind === "armed" || kind === "blending" || kind === "off";
@@ -67,9 +70,9 @@ YTDJ.start({
       kind, eyebrow: paused && hasPlan ? "Paused" : copy[0], headline: copy[1], body: copy[2], status: copy[2], pill: copy[0], step: kind === "analysing" ? 2 : -1,
       steps: ["fetching audio", "checking length", "separating stems", "mapping sections", "matching tempo & key", "choosing the moment"],
       paused, enabled, helper, engine: "all-in-one", p, sinceDrop: kind === "arrival" ? 3 + el : 99, countdown, countLabel: kind === "blending" ? "Drop in" : "Mix in",
-      plan: hasPlan ? { tech: "Harmonic blend", style: "blend", leave: "at the end of the chorus", enter: "as a verse begins", exitAt: 262, entryAt: 31, camA: "9A", camB: "9B", blendLen: 16,
-        mixStart: enabled ? 243 : null, mixEnd: enabled ? 259 : null, drop: enabled ? 259 : null } : null,
-      time, dur: 309, segs: kind === "analysing" ? null : segs, beat, beatPhase: ph,
+      plan: hasPlan ? { tech: "Harmonic blend", style: "blend", leave: "at the end of the chorus", enter: "as a verse begins", exitAt: 335, entryAt: 12, camA: "7A", camB: "8B", blendLen: 16,
+        mixStart: enabled ? MIX_START : null, mixEnd: enabled ? MIX_START + 16 : null, drop: enabled ? MIX_START + 16 : null } : null,
+      time, dur: 363, segs: kind === "analysing" ? null : segs, beat, beatPhase: ph,
       audio: { bins, bass: avg(0, 6), mid: avg(8, 16), high: avg(16, 24), level: avg(0, 24) },
       video: vid, videoOk: !Q.get("novideo"), visible: true,
       rate: Q.get("norate") ? null : RT,

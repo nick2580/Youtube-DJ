@@ -64,7 +64,7 @@
     .k-act { margin-top: 12px; padding: 6px 18px 8px; border: 2.5px solid ${INK}; border-radius: 40% 60% 50% 50% / 60% 50% 60% 50%; font: 700 20px/1 "Caveat", cursive; background: rgba(255,224,102,.6); }
     .k-f3 { position: relative; align-self: start; margin-top: calc(var(--u) * 3); padding: calc(var(--u) * 1) calc(var(--u) * 1) calc(var(--u) * 1.2); background: #fffdf6; box-shadow: 2px 4px 14px rgba(46,46,56,.22); transform: rotate(2.4deg); will-change: transform; }
     .k-f3 canvas { width: 100%; height: auto; border: 1.5px solid ${INK}; margin-bottom: 8px; } .k-tape { position: absolute; left: 30%; top: -13px; width: 40%; height: 26px; background: rgba(255,224,102,.75); transform: rotate(-4deg); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
-    .k-nt { font: 700 calc(var(--u) * 2.3)/.95 "Caveat", cursive; } .k-ns { font: 500 calc(var(--u) * 1.35)/1.1 "Caveat", cursive; color: ${BLUE}; margin-top: 3px !important; }
+    .k-nt { font: 700 calc(var(--u) * 2.3)/.95 "Caveat", cursive; white-space: nowrap; } .k-ns { font: 500 calc(var(--u) * 1.35)/1.1 "Caveat", cursive; color: ${BLUE}; margin-top: 3px !important; }
     .k-rule { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; font: 600 calc(var(--u) * 1.5)/1 "Caveat", cursive; font-variant-numeric: tabular-nums; padding-top: calc(var(--u) * 2); }
     .k-line { position: relative; flex: 1; height: 22px; border-bottom: 2.5px solid ${INK}; background: repeating-linear-gradient(90deg, ${INK} 0 1.5px, transparent 1.5px 2.5%) 0 100%/100% 8px no-repeat, repeating-linear-gradient(90deg, ${INK} 0 2px, transparent 2px 12.5%) 0 100%/100% 15px no-repeat; }
     .k-secs span { position: absolute; bottom: 26px; border: 1.5px solid ${BLUE}; border-bottom: 0; height: 7px; } .k-secs span b { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); font: 600 calc(var(--u) * 1.15)/1 "Caveat", cursive; color: ${BLUE}; white-space: nowrap; } .k-secs span.ch, .k-secs span.ch b { border-color: ${RED}; color: ${RED}; }
@@ -97,7 +97,7 @@
       Y.stepDots(q(".k-steps"), vm); Y.showCta(q(".k-act"), vm);
       // fig. 3
       const f3 = q(".k-f3"); f3.style.visibility = b ? "visible" : "hidden";
-      if (b) { Y.swap(q(".k-nt"), b.title); Y.txt(q(".k-ns"), Y.meta(b, ", ") || b.sub);
+      if (b) { if (Y.swap(q(".k-nt"), b.title)) Y.fit(q(".k-nt"), Y.u() * 2.3, Y.u() * 1.1); Y.txt(q(".k-ns"), Y.meta(b, ", ") || b.sub);
         Y.once(st, "nx", b.thumb, () => Y.img(b.thumb, (im) => { const k = im.naturalHeight / 360; st.nc.drawImage(im, 60 * k, 45 * k, 360 * k, 270 * k, 0, 0, 160, 120);
           try { const d = st.nc.getImageData(0, 0, 160, 120).data, L = new Uint8Array(19200); for (let i = 0; i < 19200; i++) L[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11; st.nc.clearRect(0, 0, 160, 120); pencil(st.nc, L, 160, 120, st.ns); } catch (_) {} }));
         f3.style.transform = `rotate(${(2.4 + Math.sin(now / 1700) * 0.8 * mo - vm.p * 5).toFixed(2)}deg) scale(${(1 + Y.ease(vm.p) * 0.12).toFixed(3)})`; }

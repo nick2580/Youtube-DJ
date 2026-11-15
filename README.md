@@ -12,7 +12,7 @@
 
 ## 18 worlds, not 18 skins
 
-The DJ view isn't one layout with swappable colours. Each world tells you what's playing, what's next and when the blend lands in its own visual language: a temple frieze, a chrome Y2K gadget, a spell book, a pointillist canvas. Every screenshot below shows the same moment: halfway through a blend.
+The DJ view isn't one layout with swappable colours. Each world tells you what's playing, what's next and when the blend lands in its own visual language: a temple frieze, a chrome Y2K gadget, a spell book, a pointillist canvas. Every screenshot below shows the same moment: halfway through a blend from Gehra Hua into Channa Mereya.
 
 <table>
   <tr>
