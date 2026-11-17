@@ -188,7 +188,7 @@
       mix_id: L.mix_id, a: L.a.id, b: L.b.id, a_rate: L.a_rate, rating: L.rating, tags: L.tags, event, plan: L.plan,
       client: {
         a: L.a, b: L.b, started_at: L.started_at, outcome: L.outcome, why: L.why, sync: L.sync,
-        level: L.level, ui_check: L.ui_check, restart_fixed: L.restart_fixed || 0,
+        level: L.level, ui_check: L.ui_check, restart_fixed: L.restart_fixed || 0, suspends: L.suspends || [],
         paused_during_mix: L.paused, rated_at_s_after_drop: L.rated_at, b_kept_s: L.b_kept_s, b_left_how: L.b_left_how,
         b_left_at: L.b_left_at, b_dur: L.b_dur, volume: L.volume, theme: localStorage.getItem("ytdj-theme"),
         ui_open: !!(window.YTDJ.isOpen && window.YTDJ.isOpen()), playback_rate_now: v ? v.playbackRate : null,
@@ -384,10 +384,17 @@
     }
 
     // keep YouTube paused/playing in step with the blend buffer
+    // During the handover the <video> sits paused for 1-2 s while YouTube loads B into it. That is not the
+    // listener pausing, and the blend buffer is the only thing audible then, so suspending the context there
+    // silenced everything until B started. Only a pause once B is loaded and syncing counts.
     if (S.mix) {
-      if (v.paused && S.phase === "mixing" && urlParam("v") === S.curId) S.mix.rec.paused = true;
-      if (v.paused && A.ctx.state === "running" && urlParam("v") === (S.phase === "handover" ? S.mix.target.id : S.curId)) A.ctx.suspend();
-      else if (!v.paused && A.ctx.state === "suspended") A.ctx.resume();
+      const M = S.mix;
+      const mine = S.phase === "mixing" ? urlParam("v") === S.curId
+        : S.phase === "handover" && M.step === "sync" && urlParam("v") === M.target.id && v.readyState >= 3;
+      if (v.paused && S.phase === "mixing" && mine) M.rec.paused = true;
+      if (v.paused && mine && A.ctx.state === "running") {
+        A.ctx.suspend(); (M.rec.suspends = M.rec.suspends || []).push({ phase: S.phase, step: M.step, ms: M.navAt ? Math.round(performance.now() - M.navAt) : null });
+      } else if ((!v.paused || !mine) && A.ctx.state === "suspended") A.ctx.resume();
     }
 
     if (S.phase === "mixing") {
