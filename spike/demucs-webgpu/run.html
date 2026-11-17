@@ -1,0 +1,14 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Demucs timing spike</title>
+<style>body{font:14px/1.4 system-ui;margin:16px;background:#111;color:#ddd}pre{white-space:pre-wrap}</style>
+<h3>Demucs in the browser: timing spike</h3>
+<p>Query: <code>?vid=&lt;11-char id in poc/cache&gt;&amp;ep=webgpu|wasm&amp;power=high-performance|low-power&amp;secs=0</code> (secs=0 = whole song)</p>
+<pre id="log"></pre>
+<script>
+  // module load errors (a bad import) never reach run.js's catch: show them here
+  const show = (m) => { document.getElementById("log").textContent += "SPIKE_FAIL " + m + "\n"; console.log("[spike] SPIKE_FAIL " + m); };
+  addEventListener("error", (e) => show(e.message || e));
+  addEventListener("unhandledrejection", (e) => show(e.reason && (e.reason.stack || e.reason.message) || e.reason));
+</script>
+<script type="module" src="run.js"></script>

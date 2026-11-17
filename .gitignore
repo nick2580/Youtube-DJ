@@ -35,3 +35,10 @@ poc/out*/
 Thumbs.db
 .vscode/
 .idea/
+
+# --- spikes: vendored third-party code, model weights, separated audio ---
+spike/*/vendor/
+spike/*/models/
+spike/*/out/
+*.onnx
+*.f32
