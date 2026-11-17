@@ -66,7 +66,7 @@
       st.rot = (st.rot + dt * (3 + au.level * 14) * mo) % 360; q(".o-rays").style.transform = `rotate(${st.rot.toFixed(2)}deg)`;
       Y.sty(q(".o-dots"), "--dr", (5 + bt * 3.5 * mo).toFixed(1) + "px");
       if (vm.videoOk && Y.frameTick !== st.ft) { st.ft = Y.frameTick; const L = Y.lum(160, 90); if (L) this.paint(st, L); else st.cs.forEach((c, k) => { c.filter = `grayscale(1) contrast(3) sepia(1) hue-rotate(${k * 90}deg) saturate(6)`; c.drawImage(Y.frame, 0, 0, 160, 90); }); }
-      else if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 160; t.height = 90; const tc = t.getContext("2d"), k = im.naturalHeight / 360; tc.drawImage(im, 0, 45 * k, 480 * k, 270 * k, 0, 0, 160, 90);
+      else if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 160; t.height = 90; const tc = t.getContext("2d", { willReadFrequently: true }), k = im.naturalHeight / 360; tc.drawImage(im, 0, 45 * k, 480 * k, 270 * k, 0, 0, 160, 90);
         try { const d = tc.getImageData(0, 0, 160, 90).data, L = new Uint8Array(14400); for (let i = 0; i < 14400; i++) L[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11; if (!Y.vm.videoOk) this.paint(st, L); } catch (_) {} }));
       q(".o-quad").style.transform = `rotate(${(2 + Math.sin(now / 1300) * 0.6 * mo).toFixed(2)}deg) scale(${(1 + bt * 0.014 * mo).toFixed(4)})`;
       Y.txt(q(".o-eb"), vm.paused ? "Meanwhile, on pause..." : vm.kind === "blending" ? "Its final moments!" : "Now playing!");

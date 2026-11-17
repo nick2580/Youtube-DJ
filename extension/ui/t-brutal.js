@@ -66,7 +66,7 @@
     `,
     mount(el) {
       const q = (s) => el.querySelector(s);
-      const st = { el, q, ft: -1, c: q(".b-vid canvas").getContext("2d"), nc: q(".b-next canvas").getContext("2d"), mx: 0, ds: {}, ns: {}, beatN: 0, lastPh: 0 };
+      const st = { el, q, ft: -1, c: q(".b-vid canvas").getContext("2d"), nc: q(".b-next canvas").getContext("2d", { willReadFrequently: true }), mx: 0, ds: {}, ns: {}, beatN: 0, lastPh: 0 };
       q(".b-eq").innerHTML = "<i></i>".repeat(24); st.eq = [...q(".b-eq").children];
       q(".b-vid").onclick = () => Y.source.act.playPause(); Y.bindCta(q(".b-act"));
       return st;

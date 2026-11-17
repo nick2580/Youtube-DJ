@@ -161,10 +161,19 @@
     const st = document.createElement("style");
     st.textContent = F.map(([fam, file, w, s]) =>
       `@font-face{font-family:"${fam}";src:url("${source.fontUrl(file + ".woff2")}") format("woff2");font-weight:${w};font-style:${s || "normal"};font-display:swap}`).join("");
+    // YouTube page changes can run a View Transition: Chrome then draws the page as snapshots, and anything
+    // YouTube gave a view-transition-name is drawn ABOVE the rest, our overlay included, for a second or two
+    // (logged: overlay open + opaque, yet <html> on top at the centre). Naming our host too lifts it into its
+    // own group, which comes last in paint order (top z-index), so it stays on top; no animation, live image only.
+    st.textContent += "::view-transition-group(ytdj-overlay),::view-transition-image-pair(ytdj-overlay),::view-transition-new(ytdj-overlay){animation:none!important}" +
+      "::view-transition-old(ytdj-overlay){display:none!important}";
     (document.head || document.documentElement).appendChild(st);
 
     const host = document.createElement("div");
     host.id = "ytdj-host";
+    // a real full-viewport box (not a 0x0 div) so it can be captured as one view-transition group;
+    // clicks pass through it except where the overlay / pill / rating widgets opt back in
+    host.style.cssText = "position:fixed;inset:0;z-index:2147483645;pointer-events:none;display:block;margin:0;padding:0;border:0;background:none";
     const root = host.attachShadow({ mode: "open" });
     document.documentElement.appendChild(host);
     const style = document.createElement("style");
@@ -238,9 +247,33 @@
       open = force === undefined ? !open : force;
       if (open && !cur) show(name, true);
       R.classList.toggle("open", open);
+      host.style.viewTransitionName = open ? "ytdj-overlay" : "";
       document.documentElement.style.overflow = open ? "hidden" : "";
     };
     Y.isOpen = () => open;
+    // this copy of the extension is orphaned (extension reloaded): close, freeze, and offer a refresh
+    let retired = false;
+    Y.retire = (msg) => {
+      if (retired) return;
+      retired = true;
+      Y.toggle(false);
+      $(".prate").style.display = "none";
+      const pill = $(".pill");
+      pill.style.display = "flex"; pill.title = "Refresh the page to load the new version";
+      Y.txt($(".pl-v"), msg);
+      pill.onclick = () => location.reload();
+    };
+    // what is actually on screen (diagnostics for the song-switch flash)
+    const desc = (el) => (el ? el.tagName.toLowerCase() + (el.id ? "#" + el.id : "") + (el.classList && el.classList.length ? "." + [...el.classList].slice(0, 2).join(".") : "") : null);
+    Y.screen = () => {
+      const cs = getComputedStyle(ov), hit = document.elementsFromPoint(innerWidth / 2, innerHeight / 2)[0];
+      let popovers = 0, modal = 0;
+      try { popovers = document.querySelectorAll(":popover-open").length; } catch (_) {}
+      try { modal = document.querySelectorAll("dialog:modal").length; } catch (_) {}
+      return { open, ovOpacity: +cs.opacity, ovVis: cs.visibility, top: desc(hit), fs: desc(document.fullscreenElement),
+        popovers, modal, hidden: document.visibilityState !== "visible", path: location.pathname,
+        vt: document.getAnimations().filter((a) => ((a.effect && a.effect.pseudoElement) || "").includes("view-transition")).length };
+    };
 
     const menu = (on) => { $(".dk-themes").classList.toggle("open", on); $(".dk-pick").setAttribute("aria-expanded", on ? "true" : "false"); };
     R.querySelectorAll(".dk-t").forEach((b) => (b.onclick = () => { show(b.dataset.t); menu(false); }));
@@ -312,6 +345,7 @@
 
     let lastT = performance.now(), lastPill = 0, lastFrame = 0, ang = 0;
     function loop(now) {
+      if (retired) return;
       const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
       try {
         if (open || now - lastPill > 250) {
@@ -391,7 +425,7 @@
   button:focus-visible { outline: 2px solid var(--dk-accent, #fff); outline-offset: 2px; }
 
   /* launcher on the YouTube page */
-  .pill { position: fixed; right: 24px; bottom: 24px; z-index: 2147483646; display: flex; align-items: center; gap: 11px; padding: 7px 18px 7px 7px; border-radius: 999px;
+  .pill { pointer-events: auto; position: fixed; right: 24px; bottom: 24px; z-index: 2147483646; display: flex; align-items: center; gap: 11px; padding: 7px 18px 7px 7px; border-radius: 999px;
     background: rgba(22,21,24,.86); border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 12px 34px rgba(0,0,0,.45);
     color: #f3efe8; font: 500 13px/1.2 "Jost", system-ui, sans-serif; transition: opacity .5s ease .25s, transform .5s ease .25s; }
   .pill:hover { background: rgba(34,33,37,.92); }
@@ -412,7 +446,7 @@
   .rt-b[aria-pressed="true"] { background: var(--dk-accent, #fff); color: var(--dk-on, #111); border-color: transparent; }
   .rt-b[aria-pressed="true"] svg { fill: currentColor; fill-opacity: .25; transform: scale(1.12); }
   .rt-dn[aria-pressed="true"] svg { transform: rotate(180deg) scale(1.12); }
-  .prate { position: fixed; right: 24px; bottom: 84px; z-index: 2147483646; padding: 5px 5px 5px 14px; border-radius: 999px; background: rgba(22,21,24,.86);
+  .prate { pointer-events: auto; position: fixed; right: 24px; bottom: 84px; z-index: 2147483646; padding: 5px 5px 5px 14px; border-radius: 999px; background: rgba(22,21,24,.86);
     border: 1px solid rgba(255,255,255,.16); backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 12px 34px rgba(0,0,0,.45); color: #f3efe8; font: 500 12.5px/1 "Jost", system-ui, sans-serif;
     animation: rt-in .45s cubic-bezier(.05,.7,.1,1); }
   .prate .rt-b { height: 30px; width: 30px; border-color: rgba(255,255,255,.22); }

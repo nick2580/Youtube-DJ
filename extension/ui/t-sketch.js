@@ -74,7 +74,7 @@
     `,
     mount(el) {
       const q = (s) => el.querySelector(s);
-      const st = { el, q, ft: -1, c: q(".k-vid canvas").getContext("2d"), nc: q(".k-f3 canvas").getContext("2d"), seed: 0, last: 0, es: {}, ns: {} };
+      const st = { el, q, ft: -1, c: q(".k-vid canvas").getContext("2d"), nc: q(".k-f3 canvas").getContext("2d", { willReadFrequently: true }), seed: 0, last: 0, es: {}, ns: {} };
       q(".k-vid").onclick = () => Y.source.act.playPause(); Y.bindCta(q(".k-act"));
       return st;
     },
@@ -82,7 +82,7 @@
       const { q } = st, a = vm.now, b = vm.next, mo = Y.motion;
       if (now - st.last > 130 / Math.max(0.2, mo)) { st.last = now; st.seed = (st.seed % 7) + 1; q("#k-boil feTurbulence").setAttribute("seed", st.seed); }
       if (vm.videoOk && Y.frameTick !== st.ft) { st.ft = Y.frameTick; const L = Y.lum(320, 180); if (L) pencil(st.c, L, 320, 180, st.es); else { st.c.clearRect(0, 0, 320, 180); st.c.globalAlpha = 0.5; st.c.drawImage(Y.frame, 0, 0); q(".k-vid canvas").style.filter = "grayscale(1) contrast(1.6)"; } }
-      else if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 320; t.height = 180; const tc = t.getContext("2d"), k = im.naturalHeight / 360; tc.drawImage(im, 0, 45 * k, 480 * k, 270 * k, 0, 0, 320, 180);
+      else if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 320; t.height = 180; const tc = t.getContext("2d", { willReadFrequently: true }), k = im.naturalHeight / 360; tc.drawImage(im, 0, 45 * k, 480 * k, 270 * k, 0, 0, 320, 180);
         try { const d = tc.getImageData(0, 0, 320, 180).data, L = new Uint8Array(57600); for (let i = 0; i < 57600; i++) L[i] = d[i * 4] * 0.3 + d[i * 4 + 1] * 0.59 + d[i * 4 + 2] * 0.11; if (!Y.vm.videoOk) pencil(st.c, L, 320, 180, st.es); } catch (_) {} }));
       Y.swap(q(".k-title"), a ? a.title : "nothing playing yet"); Y.txt(q(".k-sub"), a ? a.sub : "open a YouTube Mix and this page fills in");
       Y.txt(q(".k-meta"), a && a.bpm ? `tempo ≈ ${Math.round(a.bpm)} bpm, key: ${a.key} (${a.cam})` : "");

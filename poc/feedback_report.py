@@ -6,14 +6,16 @@ Summarise the thumbs up/down log written by the helper (feedback/feedback.jsonl)
 One mix is logged several times (mix end, rating, tag edits, when song B was left): the last line per mix_id
 wins, but b_kept_s is taken from whichever line has it.
 """
-import argparse, csv, json, os, statistics as st
+import argparse, csv, json, math, os, statistics as st, sys
 from collections import Counter, defaultdict
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+if hasattr(sys.stdout, "reconfigure"):      # song titles don't fit cp1252, the Windows console default
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 LOG = os.path.join("feedback", "feedback.jsonl")
 
 # score terms of the chosen candidate (dj_mix_v7.find_transition) + render numbers worth comparing up vs down
-FEATURES = ["score", "a_vox", "a_rms", "b_vox", "b_rms", "level", "vox_match", "harm", "a_next"]
+FEATURES = ["score", "a_vox", "a_rms", "b_vox", "b_rms", "level", "vox_match", "harm", "a_next", "hype_b", "hype_a_before"]
 RENDER = ["camelot_score", "stretch_pct", "gain_b_over_a", "align_shift_ms", "peak_before_limit", "chosen_rank_overall", "cands_after_min_exit"]
 
 
@@ -45,7 +47,10 @@ def row(r):
            "stretch_pct": round((P.get("k", 1) - 1) * 100, 2) if P else None, "a_rate": P.get("a_rate"),
            "on_down": ch.get("on_down"), "exit_at": P.get("exit_a_orig"), "entry_at": P.get("entry_b_orig"),
            "b_kept_s": c.get("b_kept_s"), "b_left_how": c.get("b_left_how"), "paused": c.get("paused_during_mix"),
-           "sync_drift_ms": (c.get("sync") or {}).get("drift_ms"), "rated_at_s_after_drop": c.get("rated_at_s_after_drop"),
+           "stretch_capped": d.get("stretch_capped"),
+           "sync_drift_ms": (c.get("sync") or {}).get("drift_ms"), "sync_ms": (c.get("sync") or {}).get("ms"),
+           "vol_b_pred": (c.get("level") or {}).get("b_pred"), "vol_b_actual": (c.get("level") or {}).get("b_actual"),
+           "ui_glitches": len((c.get("ui_check") or {}).get("bad") or []), "rated_at_s_after_drop": c.get("rated_at_s_after_drop"),
            "blend_file": r.get("blend_file")}
     out.update({f: ch.get(f) for f in FEATURES})
     out.update({f: d.get(f) for f in RENDER if f != "stretch_pct"})
@@ -84,6 +89,9 @@ def main():
         print("\nby technique"); by("style")
         print("\nby key fit (camelot score)"); by("camelot_score", lambda v: "none" if v is None else ">=0.85 compatible" if v >= 0.85 else "<0.85 clash-risk")
         print("\nby tempo stretch"); by("stretch_pct", lambda v: "none" if v is None else "0" if v == 0 else "<=2%" if abs(v) <= 2 else ">2%")
+        print("\nby A already time-stretched by the previous mix"); by("a_rate", lambda v: "none" if v is None else "a_rate = 1" if abs(v - 1) < 1e-3 else "a_rate != 1")
+        print("\nby tempo gap too big to match (> 4%)"); by("stretch_capped")
+        print("\nby handover on A's downbeat"); by("on_down")
         print("\nby exit section"); by("exit_section")
         print("\nby entry section"); by("entry_section")
         print("\nmean of each score term, up vs down (big gaps = terms worth re-weighting)")
@@ -102,6 +110,18 @@ def main():
             print("\nthumbs down (re-listen with the blend file):")
         for x in down:
             print(f"  {x['ts']}  {x['a']} -> {x['b']}  [{x['style']}, {x['exit_section']} -> {x['entry_section']}]  {x['tags']}\n      {x['blend_file']}")
+    # handover health over every mix: sync should lock (< 25 ms) before its timeout, and B's level predicted
+    # from loudness should match the volume YouTube actually gave B
+    dr = [abs(x["sync_drift_ms"]) for x in rows if isinstance(x["sync_drift_ms"], (int, float))]
+    if dr:
+        print(f"\nhandover sync: median |drift| {st.median(dr):.0f} ms, {sum(d < 25 for d in dr)}/{len(dr)} locked under 25 ms")
+    lv = [(x["vol_b_pred"], x["vol_b_actual"]) for x in rows if x["vol_b_pred"] and x["vol_b_actual"]]
+    if lv:
+        err = [abs(20 * math.log10(p / a)) for p, a in lv]
+        print(f"B level prediction: median error {st.median(err):.2f} dB, worst {max(err):.2f} dB over {len(err)} mixes")
+    gl = [x for x in rows if x["ui_glitches"]]
+    if gl:
+        print(f"{len(gl)} mixes where the DJ view was off screen during the switch (client.ui_check in the log)")
     unrated_skips = [x for x in rows if not x["rating"] and x["b_left_how"] == "skipped_or_jumped" and (x["b_kept_s"] or 99) < 30]
     if unrated_skips:
         print(f"\n{len(unrated_skips)} unrated mixes where song B was skipped within 30 s (likely silent thumbs down):")

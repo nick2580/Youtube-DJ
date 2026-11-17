@@ -161,7 +161,7 @@
     `,
     mount(el) {
       const q = (s) => el.querySelector(s);
-      const st = { el, q, ft: -1, motes: [], rc: q(".n-relief").getContext("2d"), tc: q(".n-tc").getContext("2d"), tid: null, tst: {}, secKey: "", titleKey: "", u: 15 };
+      const st = { el, q, ft: -1, motes: [], rc: q(".n-relief").getContext("2d"), tc: q(".n-tc").getContext("2d", { willReadFrequently: true }), tid: null, tst: {}, secKey: "", titleKey: "", u: 15 };
       for (let i = 0; i < 54; i++) st.motes.push({ x: Math.random(), y: Math.random(), z: 0.4 + Math.random() * 1.4, p: Math.random() * 6.28, s: 0.4 + Math.random() });
       q(".n-frame").onclick = () => Y.source.act.playPause();
       Y.bindCta(q(".n-act"));

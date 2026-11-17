@@ -55,7 +55,7 @@
       q(".q-light").style.opacity = (0.8 + au.level * 0.25).toFixed(3);
       // the painting: a few hundred new dabs each frame, sampled from the film (or the cover while there is no film)
       if (vm.videoOk && Y.frameTick !== st.ft) { st.ft = Y.frameTick; const d = Y.pixels(160, 100); if (d) st.px = d.slice ? d.slice() : d; else if (!st.flat) { st.flat = true; q(".q-main canvas").style.cssText += "-webkit-mask:radial-gradient(circle,#000 0 2.4px,transparent 3px) 0 0/6px 6px;"; } }
-      if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 160; t.height = 100; const tc = t.getContext("2d"), k = im.naturalHeight / 360; tc.drawImage(im, 24 * k, 45 * k, 432 * k, 270 * k, 0, 0, 160, 100); try { st.spx = tc.getImageData(0, 0, 160, 100).data; } catch (_) {} }));
+      if (!vm.videoOk && a) Y.once(st, "still", a.thumb, () => Y.img(a.thumb, (im) => { const t = document.createElement("canvas"); t.width = 160; t.height = 100; const tc = t.getContext("2d", { willReadFrequently: true }), k = im.naturalHeight / 360; tc.drawImage(im, 24 * k, 45 * k, 432 * k, 270 * k, 0, 0, 160, 100); try { st.spx = tc.getImageData(0, 0, 160, 100).data; } catch (_) {} }));
       const src = vm.videoOk ? st.px : st.spx;
       if (src && !st.primed) { st.primed = true; dab(st.c, src, 160, 100, 7000, 720, 450, 4.6); }
       if (st.flat && vm.videoOk) Y.cover(st.c, Y.frame, 320, 180, 720, 450);
@@ -64,7 +64,7 @@
       Y.txt(q(".q-med"), a ? `Light on screen, painted in dots as it plays${a.bpm ? `. ${Math.round(a.bpm)} bpm, ${a.key}` : ""}` : "");
       // next canvas
       const side = q(".q-small"); side.parentElement.querySelector(".q-card").style.visibility = side.style.visibility = b ? "visible" : "hidden";
-      if (b) { Y.once(st, "nx", b.thumb, () => { st.npx = null; Y.img(b.thumb, (im) => { const t = document.createElement("canvas"); t.width = 80; t.height = 80; const tc = t.getContext("2d"), k = im.naturalHeight / 360; tc.drawImage(im, 105 * k, 45 * k, 270 * k, 270 * k, 0, 0, 80, 80); try { st.npx = tc.getImageData(0, 0, 80, 80).data; st.nc.fillStyle = "#e9e2cf"; st.nc.fillRect(0, 0, 240, 240); dab(st.nc, st.npx, 80, 80, 2600, 240, 240, 3.4); } catch (_) {} }); });
+      if (b) { Y.once(st, "nx", b.thumb, () => { st.npx = null; Y.img(b.thumb, (im) => { const t = document.createElement("canvas"); t.width = 80; t.height = 80; const tc = t.getContext("2d", { willReadFrequently: true }), k = im.naturalHeight / 360; tc.drawImage(im, 105 * k, 45 * k, 270 * k, 270 * k, 0, 0, 80, 80); try { st.npx = tc.getImageData(0, 0, 80, 80).data; st.nc.fillStyle = "#e9e2cf"; st.nc.fillRect(0, 0, 240, 240); dab(st.nc, st.npx, 80, 80, 2600, 240, 240, 3.4); } catch (_) {} }); });
         if (st.npx) dab(st.nc, st.npx, 80, 80, 14 + Math.round(pe * 120), 240, 240, 3.4);
         Y.txt(q(".q-nl"), vm.kind === "blending" ? "Being hung now" : "Next in the room"); Y.swap(q(".q-nt"), b.title); Y.txt(q(".q-ns"), Y.meta(b, ", ") || b.sub);
         side.style.transform = `rotate(${(Math.sin(now / 2600) * 0.5 * mo).toFixed(2)}deg) scale(${(1 + pe * 0.1).toFixed(3)})`; }

@@ -14,6 +14,12 @@ from dj_mix import analyse, camelot_score, tempo_ratio, smooth
 from dj_mix_v3 import stems, bands, fine_align, soft_limit, SR
 from dj_mix_v5 import vocal_activity
 from dj_mix_v7 import find_transition, echo_tail, tempo_match, MAX_STRETCH
+import hype
+
+# hype (YouTube "Most replayed") score terms, added on top of v7's candidate score (typically 7..10)
+W_HYPE_B = 2.0       # B enters on a hot stretch: mean heat percentile over B's first 4 bars, 0..1
+W_HYPE_A = 0.6       # A leaves right as a hot stretch ends: heat percentile over the 8 s before A's last word
+W_HOOK_DONE = 1.5    # penalty for leaving A before its first big hook has played
 
 
 class NoTransition(Exception):
@@ -37,7 +43,29 @@ def prep_track(path):
     """Everything per-track that a mix needs, cached: Demucs stems (warm GPU) + allin1 structure + analysis."""
     from separator import separate_vocals
     separate_vocals(path)
+    loudness(path)
     return analysis(path)
+
+
+def loudness(path):
+    """Integrated loudness (EBU R128, LUFS) of the whole track, cached next to it.
+    YouTube's player normalises every video to about -14 LUFS by lowering the <video> element's volume:
+    element volume = slider * min(1, 10^((-14 - LUFS) / 20)). Checked against 70 logged mixes: within 0.15 dB.
+    The extension uses this to play song B's part of the blend at the level YouTube will play B."""
+    import json, re, subprocess
+    cache = path + ".lufs.json"
+    if os.path.exists(cache) and os.path.getmtime(cache) > os.path.getmtime(path):
+        return json.load(open(cache))["lufs"]
+    err = subprocess.run(["ffmpeg", "-nostats", "-i", path, "-af", "ebur128", "-f", "null", "-"],
+                         capture_output=True, text=True).stderr
+    found = re.findall(r"I:\s+(-?[\d.]+) LUFS", err)
+    lufs = float(found[-1]) if found else None
+    json.dump({"lufs": lufs}, open(cache, "w"))
+    return lufs
+
+
+def yt_gain(lufs, target=-14.0):
+    return None if lufs is None else float(min(1.0, 10 ** ((target - lufs) / 20)))
 
 
 def track_meta(S):
@@ -192,31 +220,82 @@ def load_window(path, t0, t1, r, total_len, fast=False):
     return out
 
 
-def plan_and_render(a_path, b_path, a_rate=1.0, min_exit=0.0, pre_roll=8.0, tail=25.0, progress=lambda s: None):
-    """a_path/b_path: ORIGINAL audio. A is currently playing at speed a_rate (session tempo).
-    min_exit is in A's ORIGINAL timeline (what YouTube's currentTime reports)."""
-    import os
+def apply_hype(cands, HA, HB, b_tempo):
+    """Re-score v7's candidates with the songs' hype maps (either may be None = no data, terms stay 0).
+    HA is in A's session time (scaled by a_rate), HB in B's original time, like tA/tH and tH_B."""
+    hook_end = HA.first_hook_end() if HA else None
+    b_win = 4 * 240 / b_tempo
+    for c in cands:
+        # land on the hook as it STARTS: hot after the entry, and less so mid-hook (already hot before it)
+        c["hype_b"] = (HB.level(c["tH_B"], c["tH_B"] + b_win) * (1 - 0.4 * HB.level(c["tH_B"] - b_win, c["tH_B"]))) if HB else None
+        c["hype_a_before"] = HA.level(c["tA"] - 8, c["tA"]) if HA else None
+        c["a_hook_done"] = None if hook_end is None else bool(c["tA"] >= hook_end - 1.0)
+        c["score_v7"] = c["score"]
+        c["score"] = (c["score"] + W_HYPE_B * (c["hype_b"] or 0) + W_HYPE_A * (c["hype_a_before"] or 0)
+                      - (W_HOOK_DONE if c["a_hook_done"] is False else 0))
+    cands.sort(key=lambda c: -c["score"])
+    return cands
+
+
+_vox_cache = {}
+
+
+def _vox(path):
+    """Vocal activity + line segments of a track's ORIGINAL vocal stem (memory-cached: the set planner
+    reads the same songs several times)."""
+    key = (path, os.path.getmtime(path))
+    if key not in _vox_cache:
+        _vox_cache[key] = vocal_segments(stems(path))
+        while len(_vox_cache) > 12:
+            _vox_cache.pop(next(iter(_vox_cache)))
+    return _vox_cache[key]
+
+
+def pair_candidates(a_path, b_path, a_rate=1.0, use_hype=True):
+    """Every scored A->B transition candidate (v7 search + hype), best first, plus what rendering needs.
+    A plays at speed a_rate (session tempo): tA/tH are in A's session time, tH_B in B's original time."""
     name = lambda p: os.path.splitext(os.path.basename(p))[0]
-    voc_a_path = os.path.join("stems", "htdemucs", name(a_path), "vocals.wav")
-    voc_b_path = os.path.join("stems", "htdemucs", name(b_path), "vocals.wav")
-    voc_a0, voc_b0 = stems(a_path), stems(b_path)
     A = scale_analysis(analysis(a_path), a_rate)
     B0 = analysis(b_path)
-    actA, segA, dbA = scale_vocals(*vocal_segments(voc_a0), a_rate)
-    actB, segB, dbB = vocal_segments(voc_b0)
+    actA, segA, dbA = scale_vocals(*_vox(a_path), a_rate)
+    actB, segB, dbB = _vox(b_path)
 
     rate, _ = tempo_ratio(A["tempo"], B0["tempo"])
     k = rate if abs(rate - 1) <= MAX_STRETCH else 1.0
     if abs(k - 1) < 0.003:
         k = 1.0
     style = "blend" if camelot_score(A["key"], B0["key"]) >= 0.85 else "overlap"
+    every = find_transition(A, B0, actA, segA, dbA, actB, segB, dbB, k)
+    HA = hype.Hype.load(name(a_path), a_rate) if use_hype else None
+    HB = hype.Hype.load(name(b_path)) if use_hype else None
+    every = apply_hype(every, HA, HB, B0["tempo"])
+    return {"a_path": a_path, "b_path": b_path, "a_rate": a_rate, "A": A, "B0": B0, "k": k, "rate": rate,
+            "style": style, "every": every, "HA": HA, "HB": HB, "segA": segA, "segB": segB}
+
+
+def plan_and_render(a_path, b_path, a_rate=1.0, min_exit=0.0, pre_roll=8.0, tail=25.0, progress=lambda s: None,
+                    use_hype=True, chain=(), a_entry=None):
+    """a_path/b_path: ORIGINAL audio. A is currently playing at speed a_rate (session tempo).
+    min_exit is in A's ORIGINAL timeline (what YouTube's currentTime reports).
+    chain: audio of the songs queued after B (prepped); when given, the transition is chosen by the set planner
+    (setplan.py), looking that many songs further ahead. a_entry: where A itself was entered (orig), if mixed in."""
+    name = lambda p: os.path.splitext(os.path.basename(p))[0]
+    voc_a_path = os.path.join("stems", "htdemucs", name(a_path), "vocals.wav")
+    voc_b_path = os.path.join("stems", "htdemucs", name(b_path), "vocals.wav")
+    X = pair_candidates(a_path, b_path, a_rate, use_hype)
+    A, B0, k, rate, style, every, HA, HB = (X[key] for key in ("A", "B0", "k", "rate", "style", "every", "HA", "HB"))
+    segA, segB = X["segA"], X["segB"]
 
     min_exit_s = min_exit / a_rate
-    every = find_transition(A, B0, actA, segA, dbA, actB, segB, dbB, k)
     cands = [c for c in every if c["tH"] - 8 * 240 / A["tempo"] - pre_roll >= min_exit_s]
     if not cands:
         raise NoTransition("no good mix point left in this song")
-    c = cands[0]
+    set_diag = None
+    if chain or a_entry is not None:      # a song mixed in gets its time-in-set rule even with nothing queued after B
+        import setplan
+        c, set_diag = setplan.choose(X, cands, list(chain), a_entry, pre_roll, pair_candidates)
+    else:
+        c = cands[0]
 
     # session-time windows we actually need (stretch only those, all four in parallel)
     from concurrent.futures import ThreadPoolExecutor
@@ -245,8 +324,8 @@ def plan_and_render(a_path, b_path, a_rate=1.0, min_exit=0.0, pre_roll=8.0, tail
     P = pre_roll
     plan = {
         "style": style, "k": k, "a_rate": a_rate,
-        "a": track_meta(A) | {"bpm_session": round(A["tempo"], 1)},
-        "b": track_meta(B0),
+        "a": track_meta(A) | {"bpm_session": round(A["tempo"], 1), "yt_gain": yt_gain(loudness(a_path))},
+        "b": track_meta(B0) | {"yt_gain": yt_gain(loudness(b_path))},
         "file_dur": len(audio) / SR, "blend_start": P, "drop": P + (hA - a0) / SR, "blend_end": P + n / SR,
         "file_start_a_orig": p0 / SR * a_rate,          # A: orig = file_start_a_orig + tau * a_rate
         "b_file_origin": (b0 - (a0 - p0)) / SR,          # B: orig = (b_file_origin + tau) * k
@@ -255,12 +334,14 @@ def plan_and_render(a_path, b_path, a_rate=1.0, min_exit=0.0, pre_roll=8.0, tail
         "diag": _jsonable(diag | {
             # why this transition: the inputs behind every decision the engine made, so a thumbs up/down
             # can be traced back to the score terms, the key/tempo calls and the render settings
-            "engine": "v7", "analyzer_a": A.get("analyzer", "librosa"), "analyzer_b": B0.get("analyzer", "librosa"),
+            "engine": ("v7+hype" if (HA or HB) else "v7") + ("+set" if set_diag else ""), "set": set_diag,
+            "hype_a": HA.summary(a_rate) if HA else None, "hype_b": HB.summary() if HB else None,
+            "analyzer_a": A.get("analyzer", "librosa"), "analyzer_b": B0.get("analyzer", "librosa"),
             "bpm_a_orig": A["tempo"] / a_rate, "bpm_b": B0["tempo"], "tempo_ratio": rate, "stretch_capped": k == 1.0 and abs(rate - 1) > MAX_STRETCH,
             "camelot_score": camelot_score(A["key"], B0["key"]), "key_a": A["key"], "key_b": B0["key"],
             "min_exit_orig": min_exit, "cands_total": len(every), "cands_after_min_exit": len(cands),
             "chosen": c, "chosen_rank_overall": every.index(c),
-            "runners_up": [{key: x.get(key) for key in ("score", "tA", "tH", "tH_B", "a_sec", "b_sec", "harm", "level", "vox_match", "on_down")}
+            "runners_up": [{key: x.get(key) for key in ("score", "tA", "tH", "tH_B", "a_sec", "b_sec", "harm", "level", "vox_match", "on_down", "hype_b", "hype_a_before", "a_hook_done")}
                            for x in cands[1:6]],
             "a_vox_segments_near_exit": [s for s in segA if c["tA"] - 20 <= s[1] and s[0] <= c["tH"] + 10],
             "b_vox_segments_near_entry": [s for s in segB if c["tH_B"] - 10 <= s[1] and s[0] <= c["tH_B"] + 20],

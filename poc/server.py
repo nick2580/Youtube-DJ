@@ -22,6 +22,7 @@ from pydantic import BaseModel  # noqa: E402
 from typing import Optional  # noqa: E402
 
 import engine  # noqa: E402
+import hype  # noqa: E402
 import separator  # noqa: E402
 import structure  # noqa: E402
 from dj_mix_v3 import SR  # noqa: E402
@@ -122,6 +123,7 @@ def _gpu_prep(vid, path):
     separate_vocals(path)
     T["state"] = "allin1: finding sections" if structure.AVAILABLE else "analysing"
     engine.analysis(path)
+    engine.loudness(path)
     T["state"] = "ready"
     log(f"  prepped {vid} in {time.time() - t:.1f}s (prio {T['prio']})")
     return path
@@ -131,6 +133,8 @@ def _track_job(vid):
     T = tracks[(vid, 1.0)]
     T["state"] = "downloading"
     path = download(vid)
+    T["state"] = "reading the hype map"
+    hype.fetch(vid)                      # YouTube "Most replayed" graph, cached; missing data is fine
     T["state"] = "waiting for GPU"
     return gpu_submit(T, _gpu_prep, vid, path).result()
 
@@ -184,12 +188,37 @@ def track(vid, rate=1.0, prio=PRIO_PREFETCH):
 
 
 # ------------------------------------------------------------------ pair jobs
+def prerender(b, c, plan, rest):
+    """Queue the B->C job, planned from where this plan enters B (and at B's session tempo)."""
+    import setplan
+    key, entry = job_key(b, c, plan["k"]), plan["entry_b_orig"]
+    with lock:
+        J = jobs.get(key)
+        stale = J is not None and J.get("pre") and abs(J.get("a_entry", -1) - entry) > 0.5
+        if J is not None and J["status"] != "error" and not stale:
+            return
+        jobs[key] = J = {"status": "queued", "pre": True, "a_entry": entry}
+    min_exit = setplan.min_exit_after_entry(entry, plan["b"]["bpm"])
+    mix_pool.submit(run_job, key, b, c, plan["k"], 0.0, time.time(), rest, entry, min_exit, J)
+
+
 def job_key(a, b, a_rate):
     return f"{a}|{b}|{a_rate:.4f}"
 
 
-def run_job(key, a, b, a_rate, now, t_req):
-    J = jobs[key]
+def ready_path(vid):
+    """Audio path of a track that is already downloaded + prepped, else None (never waits)."""
+    T = tracks.get((vid, 1.0))
+    if T and T["future"].done() and not T["future"].exception():
+        return T["future"].result()
+    return None
+
+
+def run_job(key, a, b, a_rate, now, t_req, queue=(), a_entry=None, min_exit=None, J=None):
+    """Plan + render A->B. queue: the songs after B; the ones already prepped (up to 2) let the set planner
+    look ahead. When done, the B->C blend is planned and rendered right away from where B will enter, so it is
+    ready the moment B starts (and that job does the same for C->D)."""
+    J = J or jobs[key]
     t0 = time.time()
     try:
         fa, fb = track(a, 1.0, PRIO_NOW), track(b, 1.0, PRIO_NOW)
@@ -200,12 +229,22 @@ def run_job(key, a, b, a_rate, now, t_req):
         ap, bp = fa.result(), fb.result()
         J["status"] = "finding the mix point"
         # earliest mix point = where the playhead WILL be when this plan reaches the browser, + safety
-        min_exit = now + (time.time() - t_req) * a_rate + 25
-        plan, audio = engine.plan_and_render(ap, bp, a_rate=a_rate, min_exit=min_exit)
+        if min_exit is None:
+            min_exit = now + (time.time() - t_req) * a_rate + 25
+        chain = []
+        for vid in list(queue)[:2]:
+            path = ready_path(vid)
+            if not path:
+                break
+            chain.append(path)
+        plan, audio = engine.plan_and_render(ap, bp, a_rate=a_rate, min_exit=min_exit, chain=chain, a_entry=a_entry)
         buf = io.BytesIO()
         sf.write(buf, audio, SR, format="FLAC", subtype="PCM_16")
         J.update(status="ready", plan=plan, flac=buf.getvalue())
-        log(f"{key} ready in {time.time() - t0:.1f}s: {plan['style']} drop at A {plan['drop_a_orig']:.1f}s -> B {plan['entry_b_orig']:.1f}s, k={plan['k']:.3f}")
+        log(f"{key} ready in {time.time() - t0:.1f}s{' (ahead)' if J.get('pre') else ''}: {plan['style']} drop at A "
+            f"{plan['drop_a_orig']:.1f}s -> B {plan['entry_b_orig']:.1f}s, k={plan['k']:.3f}, looked {len(chain)} song(s) further")
+        if queue and chain:
+            prerender(b, queue[0], plan, list(queue)[1:])
     except TooLong as e:
         J.update(status="error", error=str(e), skip=e.vid); log(key, "skip:", e)
     except engine.NoTransition as e:
@@ -221,6 +260,8 @@ class Prepare(BaseModel):
     a_rate: float = 1.0
     min_exit: float = 0.0
     now: float = 0.0
+    queue: list[str] = []             # the songs after b in the Mix, for the set planner
+    a_entry: Optional[float] = None   # where song a was mixed in (its original time), if it was
 
 
 class Warm(BaseModel):
@@ -229,7 +270,7 @@ class Warm(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"ok": True, "device": separator.DEV,
+    return {"ok": True, "device": separator.DEV, "hype": True,
             "analyzer": f"allin1 ({structure.MODEL})" if structure.AVAILABLE else "librosa"}
 
 
@@ -251,7 +292,7 @@ def prepare(p: Prepare):
             J = None
         if not J:
             jobs[key] = J = {"status": "queued"}
-            mix_pool.submit(run_job, key, p.a, p.b, p.a_rate, p.now, time.time())
+            mix_pool.submit(run_job, key, p.a, p.b, p.a_rate, p.now, time.time(), p.queue, p.a_entry, None, J)
     return {"key": key, "status": J["status"]}
 
 

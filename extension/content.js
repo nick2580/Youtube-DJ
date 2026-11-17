@@ -4,10 +4,17 @@
   window.__ytdj = true;
 
   // ------------------------------------------------------------------ helper bridge
-  const api = (path, method = "GET", body) =>
-    new Promise((res) => chrome.runtime.sendMessage({ op: "json", path, method, body }, (r) => res(r || { ok: false, offline: true })));
-  const apiBin = (path) =>
-    new Promise((res) => chrome.runtime.sendMessage({ op: "bin", path }, (r) => res(r || { ok: false, offline: true })));
+  // After the extension is reloaded or updated, this copy keeps running in the open tab but can no longer reach
+  // the extension ("Extension context invalidated"); the new copy only arrives when the tab is refreshed.
+  // So this copy retires: hands the sound back to YouTube, stops its loops, and asks for a refresh.
+  const alive = () => { try { return !!(chrome.runtime && chrome.runtime.id); } catch (_) { return false; } };
+  const send = (msg) => new Promise((res) => {
+    const fail = { ok: false, offline: true };
+    if (!alive()) { retire(); return res(fail); }
+    try { chrome.runtime.sendMessage(msg, (r) => res(r || fail)); } catch (_) { retire(); res(fail); }
+  });
+  const api = (path, method = "GET", body) => send({ op: "json", path, method, body });
+  const apiBin = (path) => send({ op: "bin", path });
   const b64ToBuf = (b64) => {
     const s = atob(b64), u = new Uint8Array(s.length);
     for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
@@ -126,7 +133,10 @@
   async function prepare(cur, next, v) {
     const key = `${cur.id}|${next.id}|${S.aRate.toFixed(4)}`;
     S.planKey = key; S.plan = null; S.buffer = null; S.phase = "preparing"; S.status = "Sending queue to the decks…";
-    const r = await api("/prepare", "POST", { a: cur.id, b: next.id, a_rate: S.aRate, min_exit: v.currentTime + 35, now: v.currentTime });
+    // the songs after `next` let the helper plan the set a few songs ahead; a_entry = where this song was mixed in
+    const L = S.lastMix, aEntry = L && L.outcome === "ok" && L.b.id === cur.id ? L.plan.entry_b_orig : null;
+    const r = await api("/prepare", "POST", { a: cur.id, b: next.id, a_rate: S.aRate, min_exit: v.currentTime + 35, now: v.currentTime,
+      queue: (S.q.upcoming || []).slice(2, 4), a_entry: aEntry });
     if (!r.ok) { S.phase = "error"; S.status = r.offline ? "helper offline" : `helper error: ${r.error}`; S.planKey = null; return; }
     S.pollT = 0;
   }
@@ -178,6 +188,7 @@
       mix_id: L.mix_id, a: L.a.id, b: L.b.id, a_rate: L.a_rate, rating: L.rating, tags: L.tags, event, plan: L.plan,
       client: {
         a: L.a, b: L.b, started_at: L.started_at, outcome: L.outcome, why: L.why, sync: L.sync,
+        level: L.level, ui_check: L.ui_check, restart_fixed: L.restart_fixed || 0,
         paused_during_mix: L.paused, rated_at_s_after_drop: L.rated_at, b_kept_s: L.b_kept_s, b_left_how: L.b_left_how,
         b_left_at: L.b_left_at, b_dur: L.b_dur, volume: L.volume, theme: localStorage.getItem("ytdj-theme"),
         ui_open: !!(window.YTDJ.isOpen && window.YTDJ.isOpen()), playback_rate_now: v ? v.playbackRate : null,
@@ -213,16 +224,29 @@
     src.buffer = S.buffer;
     src.connect(A.bufGain);
     src.start(when, Math.max(0, tau0));
-    ramp(A.bufGain.gain, vol(), when + 0.02, 0.3);
+    // YouTube normalises loudness by lowering each video's element volume (min(1, 10^((-14-LUFS)/20))),
+    // so the buffer must play A at A's volume and B at the volume YouTube will give B, or B's part of the
+    // blend is too loud/quiet and snaps back at the handover. The ratio cancels the user's slider.
+    const volA = vol(), gA = P.a.yt_gain, gB = P.b.yt_gain;
+    const normOn = gA > 0 && gB > 0 && volA <= gA * 1.06;            // volA above gA: normalisation isn't active
+    const volB = Math.min(1, normOn ? volA * gB / gA : volA);
+    const g = A.bufGain.gain, tBlend = when + Math.max(0.35, P.blend_start - tau0), tDrop = when + Math.max(0.4, P.drop - tau0);
+    g.cancelScheduledValues(ctx.currentTime);
+    g.setValueAtTime(0, when + 0.02);
+    g.linearRampToValueAtTime(volA, when + 0.32);
+    g.setValueAtTime(volA, Math.max(when + 0.33, tBlend));
+    g.linearRampToValueAtTime(volB, Math.max(when + 0.34, tDrop));
     ramp(A.vidGain.gain, 0, when + 0.02, 0.3);
     const rec = { mix_id: `${S.q.cur.id}_${S.q.next.id}_${Date.now()}`, a: songInfo(S.q.cur), b: songInfo(S.q.next), a_rate: S.aRate, plan: P,
       started_at: new Date().toISOString(), dropWall: Date.now() + (P.drop - tau0) * 1000, outcome: "playing", why: null, sync: null,
-      paused: false, rating: null, tags: [], rated_at: null, b_kept_s: null, b_left_how: null, b_left_at: null, b_dur: null, volume: Math.round(vol() * 100) / 100 };
+      paused: false, rating: null, tags: [], rated_at: null, b_kept_s: null, b_left_how: null, b_left_at: null, b_dur: null, volume: Math.round(volA * 100) / 100,
+      level: { a: r3(volA), b_pred: r3(volB), b_actual: null, norm: normOn }, ui_check: null };
     S.lastMix = rec;
     S.mix = { startCtx: when, tau0, src, target: S.q.next, k: P.k, plan: P, step: "wait", tries: 0, navAt: 0, rec };
     S.phase = "mixing";
     S.status = "Mixing";
   }
+  const r3 = (x) => Math.round(x * 1000) / 1000;
   const tau = () => S.mix.tau0 + (A.ctx.currentTime - S.mix.startCtx);
 
   function finishHandover(ok, why) {
@@ -232,12 +256,18 @@
     L.sync = { step: M.step, tries: M.tries, ms: M.syncStart ? Math.round(performance.now() - M.syncStart) : null,
       drift_ms: M.drift != null ? Math.round(M.drift * 1000) : null };
     if (!ok) L.dropWall = Math.min(L.dropWall, Date.now());
+    const vv = getVideo();
+    if (L.level && vv) L.level.b_actual = r3(vv.muted ? 0 : vv.volume);
     logMix(L, "mix_end");
     ramp(A.vidGain.gain, 1, now, 0.3);
     ramp(A.bufGain.gain, 0, now, 0.3);
     try { M.src.stop(now + 0.45); } catch (_) {}
     const v = getVideo();
-    if (ok && v) { v.playbackRate = M.k; S.aRate = M.k; S.rateFor = M.target.id; }
+    if (ok && v) {
+      v.playbackRate = M.k; S.aRate = M.k; S.rateFor = M.target.id;
+      // safety net: if YouTube still restarts B from the top after the handover, put it back where the mix left it
+      S.guard = { id: M.target.id, pos: v.currentTime, at: performance.now(), k: M.k, until: performance.now() + 12000, fixes: 0, rec: L };
+    }
     S.curId = M.target.id;
     S.mix = null;
     resetPlan(ok ? "" : "Handover fell back");
@@ -251,9 +281,14 @@
     if (urlParam("v") !== M.target.id || adShowing() || v.readyState < 2) return;
     if (M.step === "wait") {
       if (performance.now() - M.navAt < 400) return;
+      const durB = P.b && P.b.dur, isB = !durB || Math.abs(v.duration - durB) < 3;
+      const changed = M.mediaChanged || v.currentSrc !== M.srcA;
+      const durMoved = isFinite(M.durA) && Math.abs(v.duration - M.durA) > 3;
+      if (!(isB && (changed || durMoved))) return;
       v.preservesPitch = true;
       v.playbackRate = P.k;
-      v.currentTime = bOrig(t + 0.7);
+      M.lead = 0.7;
+      v.currentTime = bOrig(t + M.lead);
       if (v.paused) v.play().catch(() => {});
       M.step = "sync"; M.syncStart = performance.now();
       return;
@@ -262,13 +297,59 @@
       if (v.seeking || v.paused) return;
       const drift = v.currentTime - bOrig(tau());
       M.drift = drift;
-      if (Math.abs(drift) > 1.0 && M.tries < 3) { M.tries++; v.currentTime = bOrig(tau() + 0.7); return; }
-      if (Math.abs(drift) < 0.025 || performance.now() - M.syncStart > 4000) {
+      // the video is muted (vidGain 0) until the crossfade, so re-seeking and big speed nudges are inaudible.
+      // A seek lands `lead` seconds ahead minus however long the seek took: correct the lead by what we measured.
+      if (Math.abs(drift) > 0.25 && M.tries < 4) {
+        M.tries++; M.lead = Math.max(0.05, Math.min(2, M.lead - drift));
+        v.currentTime = bOrig(tau() + M.lead); return;
+      }
+      // lock, or give up while there is still B tail left to crossfade over (it used to stop at 4 s, ~300 ms off)
+      M.lockN = Math.abs(drift) < 0.025 ? (M.lockN || 0) + 1 : 0;      // must hold for 3 ticks (~0.4 s)
+      if (M.lockN >= 3 || performance.now() - M.syncStart > 12000 || tau() > P.file_dur - 2) {
         v.playbackRate = P.k;
         return finishHandover(true);
       }
-      // nudge playback speed to converge without an audible seek
-      v.playbackRate = P.k * (1 - Math.max(-0.08, Math.min(0.08, drift * 0.6)));
+      v.playbackRate = P.k * (1 - Math.max(-0.25, Math.min(0.25, drift)));
+    }
+  }
+
+  function restartGuard(v, vid) {
+    const G = S.guard;
+    if (!G) return;
+    const now = performance.now();
+    if (now > G.until || vid !== G.id || S.mix) { S.guard = null; return; }
+    if (v.paused || v.seeking) { G.pos = v.currentTime; G.at = now; return; }       // re-anchor across pauses
+    const expected = G.pos + ((now - G.at) / 1000) * G.k;
+    if (v.currentTime < Math.min(5, expected - 3) && G.fixes < 2) {               // jumped back to the top
+      G.fixes++; G.rec.restart_fixed = (G.rec.restart_fixed || 0) + 1;
+      console.warn("[yt-dj] YouTube restarted the song after the handover; seeking back to", expected.toFixed(1));
+      v.currentTime = expected;
+      G.pos = expected; G.at = now;
+      return;
+    }
+    G.pos = v.currentTime; G.at = now;
+  }
+
+  // What is on screen around the song switch. Records the first moments the DJ view is not what the
+  // listener sees (covered, closed, fullscreen, popover...), for the "YouTube flashes for a few seconds" report.
+  function uiCheck() {
+    const L = S.lastMix;
+    if (!L || !L.navAt || L.uiDone || !window.YTDJ.screen) return;
+    const since = performance.now() - L.navAt;
+    if (since > 15000) {                     // window over: send what was seen, if anything was wrong
+      L.uiDone = true;
+      if (L.ui_check && L.ui_check.bad.length) logMix(L, "ui_check");
+      return;
+    }
+    const s = window.YTDJ.screen();
+    if (!L.ui_check) L.ui_check = { wasOpen: s.open, samples: 0, bad: [] };
+    const U = L.ui_check; U.samples++;
+    if (!U.wasOpen) return;
+    if (s.hidden) return;                    // tab in the background: nothing to see
+    const bad = !s.open || s.top !== "div#ytdj-host" || s.fs || s.popovers || s.modal || s.ovOpacity < 0.99;
+    if (bad && U.bad.length < 6) {
+      U.bad.push({ ms: Math.round(since), step: S.mix ? S.mix.step : "after", ...s });
+      console.debug("[yt-dj] DJ view check during handover", JSON.stringify(s));
     }
   }
 
@@ -286,6 +367,8 @@
     const vid = urlParam("v");
     const isMix = (urlParam("list") || "").startsWith("RD") || !!urlParam("list");
     if (!S.enabled || !v || location.pathname !== "/watch") return;
+    uiCheck();
+    restartGuard(v, vid);
 
     // audio context needs a user gesture; wait for it
     if (!A.hooked) {
@@ -311,7 +394,13 @@
       const P = S.mix.plan, t = tau();
       if (t >= P.blend_end + 0.3) {
         S.phase = "handover"; S.status = "Handing over";
-        S.mix.navAt = performance.now();
+        S.mix.navAt = S.mix.rec.navAt = performance.now();
+        // The URL changes at once on the click, but the <video> keeps playing A's media for a moment before
+        // YouTube loads B into it. Syncing then locks onto A and YouTube starts B from 0:00 right after.
+        // So remember A's media and wait for evidence that B is loaded.
+        const M0 = S.mix;
+        M0.srcA = v.currentSrc; M0.durA = v.duration; M0.mediaChanged = false;
+        for (const ev of ["emptied", "loadstart", "durationchange"]) v.addEventListener(ev, () => { M0.mediaChanged = true; }, { once: true });
         const q = readQueue();
         const tgt = q && q.next && q.next.id === S.mix.target.id ? q.next : S.mix.target;
         (tgt.anchor || document.querySelector(".ytp-next-button"))?.click();
@@ -353,12 +442,30 @@
       if (v.currentTime >= preStart + 0.3 && !v.paused && !adShowing()) startMix(v);
     }
   }
-  setInterval(tick, 120);
+  let retired = false;
+  function retire() {
+    if (retired) return;
+    retired = true;
+    clearInterval(tickT); clearInterval(healthT);
+    try {
+      if (S.mix) S.mix.src.stop();
+      if (A.hooked) {         // the video stays routed through our AudioContext, so keep it running at full level
+        A.bufGain.gain.cancelScheduledValues(0); A.bufGain.gain.value = 0;
+        A.vidGain.gain.cancelScheduledValues(0); A.vidGain.gain.value = 1;
+        if (A.ctx.state !== "running") A.ctx.resume();
+      }
+    } catch (_) {}
+    console.info("[yt-dj] the extension was reloaded: refresh this tab to use the new version");
+    if (window.YTDJ.retire) window.YTDJ.retire("Updated · click to refresh");
+  }
+
+  const tickT = setInterval(tick, 120);
   async function health() {
     const r = await api("/health");
     S.online = !!r.ok; S.engine = r.ok ? r.data.analyzer : "";
   }
-  health(); setInterval(health, 8000);
+  health(); const healthT = setInterval(health, 8000);
+
 
   const arm = () => {
     if (!S.enabled) return;
